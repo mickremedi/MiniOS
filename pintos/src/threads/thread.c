@@ -470,7 +470,9 @@ init_thread (struct thread *t, const char *name, int priority)
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
-   returns a pointer to the frame's base. */
+   returns a pointer to the frame's base.
+   ! RECURSION!!!
+   */
 static void *
 alloc_frame (struct thread *t, size_t size)
 {
@@ -486,7 +488,9 @@ alloc_frame (struct thread *t, size_t size)
    return a thread from the run queue, unless the run queue is
    empty.  (If the running thread can continue running, then it
    will be in the run queue.)  If the run queue is empty, return
-   idle_thread. */
+   idle_thread. 
+   TODO: We need to check this one out
+   */
 static struct thread *
 next_thread_to_run (void)
 {
