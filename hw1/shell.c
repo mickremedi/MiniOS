@@ -130,6 +130,7 @@ int main(unused int argc, unused char *argv[]) {
 
         if (fundex >= 0) {
             cmd_table[fundex].fun(tokens);
+
         } else {
             pid_t pid = fork();
             int exit;
@@ -157,14 +158,27 @@ int main(unused int argc, unused char *argv[]) {
                 }
 
                 char *args[argsLen + 1];
-                for (int i = 0; i <= argsLen; i++) {
-                    if (i == argsLen) {
-                        args[i] = NULL;
-                    } else {
-                        args[i] = tokens_get_token(tokens, i);
+                int x = 0;
+                int i = 0;
+                while (i < argsLen) {
+                    if (strcmp(tokens_get_token(tokens, i), "<") == 0) {
+                        i++;
+                        FILE *input = fopen(tokens_get_token(tokens, i), "rw");
+                        dup2(fileno(input), 0);
+                        fclose(input);
+                        continue;
                     }
+                    if (strcmp(tokens_get_token(tokens, i), ">") == 0) {
+                        i++;
+                        FILE *output = fopen(tokens_get_token(tokens, i), "rw");
+                        dup2(fileno(output), 1);
+                        fclose(output);
+                        continue;
+                    }
+                    args[i] = tokens_get_token(tokens, i);
                 }
 
+                args[argsLen] = NULL;
                 return execv(inputCmd, args);
 
             } else {
