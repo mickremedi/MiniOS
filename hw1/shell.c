@@ -135,8 +135,25 @@ int main(unused int argc, unused char *argv[]) {
             int exit;
             if (pid == 0) {
                 int argsLen = tokens_get_length(tokens);
-                if (argsLen) {
-                    return 0;
+                char *inputCmd = tokens_get_token(tokens, 0);
+                if (!argsLen) return 0;
+
+                // Resolve Path
+                char *PATH = getenv("PATH");
+                char *currDir = strtok(PATH, ":");
+                char currPath[2048];
+
+                while (currDir != NULL) {
+                    strcpy(currPath, currDir);
+                    strcat(currPath, "/");
+                    strcat(currPath, inputCmd);
+                    if (access(currPath, F_OK) != -1) {
+                        inputCmd = currPath;
+                        break;
+                    } else {
+                        currPath[0] = '\n';
+                        currDir = strtok(NULL, ":");
+                    }
                 }
 
                 char *args[argsLen + 1];
@@ -148,7 +165,7 @@ int main(unused int argc, unused char *argv[]) {
                     }
                 }
 
-                return execv(tokens_get_token(tokens, 0), args);
+                return execv(inputCmd, args);
 
             } else {
                 waitpid(pid, &exit, 0);
