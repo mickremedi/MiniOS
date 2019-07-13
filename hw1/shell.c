@@ -158,24 +158,22 @@ int main(unused int argc, unused char *argv[]) {
                 }
 
                 char *args[argsLen + 1];
-                int x = 0;
                 int i = 0;
                 while (i < argsLen) {
                     if (strcmp(tokens_get_token(tokens, i), "<") == 0) {
                         i++;
-                        FILE *input = fopen(tokens_get_token(tokens, i), "rw");
+                        FILE *input = fopen(tokens_get_token(tokens, i), "r");
                         dup2(fileno(input), 0);
                         fclose(input);
-                        continue;
-                    }
-                    if (strcmp(tokens_get_token(tokens, i), ">") == 0) {
+                    } else if (strcmp(tokens_get_token(tokens, i), ">") == 0) {
                         i++;
-                        FILE *output = fopen(tokens_get_token(tokens, i), "rw");
+                        FILE *output = fopen(tokens_get_token(tokens, i), "w");
                         dup2(fileno(output), 1);
                         fclose(output);
-                        continue;
+                    } else {
+                        args[i] = tokens_get_token(tokens, i);
                     }
-                    args[i] = tokens_get_token(tokens, i);
+                    i++;
                 }
 
                 args[argsLen] = NULL;
