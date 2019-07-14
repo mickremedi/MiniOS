@@ -32,6 +32,7 @@ int cmd_exit(struct tokens *tokens);
 int cmd_help(struct tokens *tokens);
 int cmd_cd(struct tokens *tokens);
 int cmd_pwd(struct tokens *tokens);
+int cmd_wait(struct tokens *tokens);
 
 /* Built-in command functions take token array (see parse.h) and return int */
 typedef int cmd_fun_t(struct tokens *tokens);
@@ -47,7 +48,8 @@ fun_desc_t cmd_table[] = {
     {cmd_help, "?", "show this help menu"},
     {cmd_exit, "exit", "exit the command shell"},
     {cmd_cd, "cd", "changes working directory to given path"},
-    {cmd_pwd, "pwd", "prints path of working directory"}};
+    {cmd_pwd, "pwd", "prints path of working directory"},
+    {cmd_wait, "wait", "waits for background processes"}};
 
 /* Prints a helpful description for the given command */
 int cmd_help(unused struct tokens *tokens) {
@@ -74,6 +76,12 @@ int cmd_pwd(unused struct tokens *tokens) {
     char pwd[BUFSIZ];
     getcwd(pwd, sizeof(pwd));
     printf("%s\n", pwd);
+    return 0;
+}
+
+int cmd_wait(unused struct tokens *tokens) {
+    while (waitpid(-1, 0, 0))
+        ;
     return 0;
 }
 
@@ -118,10 +126,13 @@ int main(unused int argc, unused char *argv[]) {
     static char line[4096];
     int line_num = 0;
 
+    signal(SIGTTOU, SIG_IGN);
+
     /* Please only print shell prompts when standard input is not a tty */
     if (shell_is_interactive) fprintf(stdout, "%d: ", line_num);
 
     while (fgets(line, 4096, stdin)) {
+        waitpid(-1, 0, WNOHANG);
         /* Split our line into words. */
         struct tokens *tokens = tokenize(line);
 
@@ -135,6 +146,7 @@ int main(unused int argc, unused char *argv[]) {
             pid_t pid = fork();
             int exit;
             if (pid == 0) {
+                setpgrp();
                 int argsLen = tokens_get_length(tokens);
                 char *inputCmd = tokens_get_token(tokens, 0);
                 if (!argsLen) return 0;
@@ -170,6 +182,9 @@ int main(unused int argc, unused char *argv[]) {
                         FILE *output = fopen(tokens_get_token(tokens, i), "w");
                         dup2(fileno(output), 1);
                         fclose(output);
+                    } else if (i == argsLen - 1 &&
+                               strcmp(tokens_get_token(tokens, i), "&") == 0) {
+                        continue;
                     } else {
                         args[i] = tokens_get_token(tokens, i);
                     }
@@ -180,7 +195,15 @@ int main(unused int argc, unused char *argv[]) {
                 return execv(inputCmd, args);
 
             } else {
-                waitpid(pid, &exit, 0);
+                setpgid(pid, pid);
+                tcsetpgrp(STDIN_FILENO, getpgid(pid));
+                if (tokens_get_length(tokens) > 0 &&
+                    strcmp(
+                        tokens_get_token(tokens, tokens_get_length(tokens) - 1),
+                        "&") != 0) {
+                    waitpid(pid, &exit, 0);
+                }
+                tcsetpgrp(STDIN_FILENO, getpgrp());
             }
         }
 
