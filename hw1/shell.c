@@ -80,7 +80,7 @@ int cmd_pwd(unused struct tokens *tokens) {
 }
 
 int cmd_wait(unused struct tokens *tokens) {
-    while (waitpid(-1, 0, 0))
+    while (waitpid(-1, 0, 0) > 0)
         ;
     return 0;
 }
