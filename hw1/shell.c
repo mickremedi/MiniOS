@@ -184,6 +184,7 @@ int main(unused int argc, unused char *argv[]) {
                         fclose(output);
                     } else if (i == argsLen - 1 &&
                                strcmp(tokens_get_token(tokens, i), "&") == 0) {
+                        i++;
                         continue;
                     } else {
                         args[i] = tokens_get_token(tokens, i);
