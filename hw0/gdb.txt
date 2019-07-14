@@ -1,0 +1,20 @@
+What is the value of argv?
+    (char **) 0x7fffffffe638
+
+What is pointed to by argv?
+    0x7fffffffe85b "/home/vagrant/code/personal/hw0/wc"
+
+What is the address of the function main?
+    {int (int, char **)} 0x4007a2
+
+Info Stack
+    It's a stack trace of my program. I.e it tells me where it is and how it got there.
+
+Info Frame:
+    It give us a bunch of information and addresses of our frame that could be useful like args, registers
+    in use and return pointer address
+
+Info Registers:
+    rbp is storing our arglist and locals.
+    rdi has our input file
+    rsp is the stack pointer

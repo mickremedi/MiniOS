@@ -1,0 +1,27 @@
+Which of the addresses from the output of
+running ./map are defined in the executable, and which segment/section is each defined in?
+    _main, recur and static data are defined in the exectutable. 
+    main and recur can be found in .text
+    static data can be found in .data
+
+Make a list of the important segments, and what they are used for:
+    .text: Text segment contains machine code of the compiled program.
+    .bss: Data in this segment is initialized to arithmetic 0 before the program starts executing.
+    Heap: the segment where dynamic memory allocation usually takes place. When some more memory 
+        need to be allocated using malloc and calloc function, heap grows upward.
+    Stack: Stack segment is used to store all local variables and is used for passing arguments to 
+        the functions along with the return address of the instruction which is to be executed after 
+        the function call is over.
+
+What direction is the stack growing in?
+    Downwards
+
+How large is the stack frame for each recursive call?
+    48 bytes ( 3 * 16 bytes)
+
+Where is the heap? What direction is it growing in?
+    Direction: upward
+    Address: 0x1d60010
+
+Are the two malloc()ed memory areas contiguous?
+    No, theres a 12byte space between them since we malloced 100 but the difference is 0x70.
