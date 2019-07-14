@@ -93,6 +93,8 @@ struct thread
   struct list_elem allelem;  /* List element for all threads list. */
   int64_t wake_up_tick;      /* Tick time for thread to wake up */
   struct list_elem nap_elem; /* List element for nap room list */
+  int nice;                  /* Niceness of the thread  */
+  fixed_point_t recent_cpu;  /* Recent CPU */
 
   /* Shared between thread.c and synch.c. */
   struct list_elem elem; /* List element. */
