@@ -301,11 +301,21 @@ void thread_foreach(thread_action_func *func, void *aux) {
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void thread_set_priority(int new_priority) {
     enum intr_level old_level;
-
     old_level = intr_disable();
-    int old_priority = thread_current()->priority;
-    thread_current()->priority = new_priority;
-    if (new_priority < old_priority) {
+    int oldbase = thread_current()->base_priority;
+    thread_current()->base_priority = new_priority;
+
+    if (new_priority > thread_current()->priority) {
+        thread_current()->priority = new_priority;
+        if (thread_current()->needs_lock) {
+            chain_priority(thread_current(),
+                           thread_current()->needs_lock->holder);
+        }
+
+    } else if (new_priority < thread_current()->priority) {
+        if (oldbase == thread_current()->priority) {
+            thread_current()->priority = new_priority;
+        }
         thread_yield();
     }
     intr_set_level(old_level);
@@ -315,7 +325,8 @@ void thread_set_priority(int new_priority) {
 int thread_get_priority(void) { return thread_current()->priority; }
 
 /* Sets the current thread's nice value to NICE. */
-void thread_set_nice(int nice UNUSED) { /* Not yet implemented. */ }
+void thread_set_nice(int nice UNUSED) { /* Not yet implemented. */
+}
 
 /* Returns the current thread's nice value. */
 int thread_get_nice(void) {
@@ -411,6 +422,7 @@ static void init_thread(struct thread *t, const char *name, int priority) {
     t->stack = (uint8_t *)t + PGSIZE;
     t->priority = priority;
     t->base_priority = priority;
+    t->needs_lock = NULL;
     t->magic = THREAD_MAGIC;
 
     old_level = intr_disable();

@@ -93,6 +93,8 @@ struct thread {
     int64_t wake_up_tick;      /* Tick time for thread to wake up */
     struct list_elem nap_elem; /* List element for nap room list */
 
+    struct lock *needs_lock; /* Lock thread is waitig on */
+
     /* Shared between thread.c and synch.c. */
     struct list_elem elem; /* List element. */
 
