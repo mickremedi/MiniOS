@@ -423,6 +423,7 @@ static void init_thread(struct thread *t, const char *name, int priority) {
     t->priority = priority;
     t->base_priority = priority;
     t->needs_lock = NULL;
+    list_init(&t->held_locks);
     t->magic = THREAD_MAGIC;
 
     old_level = intr_disable();

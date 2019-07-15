@@ -94,6 +94,7 @@ struct thread {
     struct list_elem nap_elem; /* List element for nap room list */
 
     struct lock *needs_lock; /* Lock thread is waitig on */
+    struct list held_locks;  /* List to store locks */
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem; /* List element. */
