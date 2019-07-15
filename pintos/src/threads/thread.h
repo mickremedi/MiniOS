@@ -81,23 +81,26 @@ typedef int tid_t;
    only because they are mutually exclusive: only a thread in the
    ready state is on the run queue, whereas only a thread in the
    blocked state is on a semaphore wait list. */
-struct thread
-{
-  /* Owned by thread.c. */
-  tid_t tid;                 /* Thread identifier. */
-  enum thread_status status; /* Thread state. */
-  char name[16];             /* Name (for debugging purposes). */
-  uint8_t *stack;            /* Saved stack pointer. */
-  int priority;              /* Priority. */
-  int base_priority;
-  struct list_elem allelem;  /* List element for all threads list. */
-  int64_t wake_up_tick;      /* Tick time for thread to wake up */
-  struct list_elem nap_elem; /* List element for nap room list */
-  int nice;                  /* Niceness of the thread  */
-  fixed_point_t recent_cpu;  /* Recent CPU */
 
-  /* Shared between thread.c and synch.c. */
-  struct list_elem elem; /* List element. */
+struct thread {
+    /* Owned by thread.c. */
+    tid_t tid;                 /* Thread identifier. */
+    enum thread_status status; /* Thread state. */
+    char name[16];             /* Name (for debugging purposes). */
+    uint8_t *stack;            /* Saved stack pointer. */
+    int priority;              /* Priority. */
+    int base_priority;
+    struct list_elem allelem;  /* List element for all threads list. */
+    int64_t wake_up_tick;      /* Tick time for thread to wake up */
+    struct list_elem nap_elem; /* List element for nap room list */
+    int nice;                  /* Niceness of the thread  */
+    fixed_point_t recent_cpu;  /* Recent CPU */
+
+    struct lock *needs_lock; /* Lock thread is waitig on */
+    struct list held_locks;  /* List to store locks */
+
+    /* Shared between thread.c and synch.c. */
+    struct list_elem elem; /* List element. */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
