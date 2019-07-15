@@ -291,7 +291,17 @@ void lock_release(struct lock *lock) {
             list_max(&thread_current()->held_locks, priority_locks, NULL);
         struct lock *max_lock =
             list_entry(max_lock_elem, struct lock, held_lock_elem);
-        lock->holder->priority = max_lock->holder->priority;
+
+        struct list_elem *max_waiter_elem =
+            list_max(&max_lock->semaphore.waiters, priority_less, NULL);
+
+        struct thread *max_waiter_thread =
+            list_entry(max_waiter_elem, struct thread, elem);
+
+        lock->holder->priority =
+            max_waiter_thread->priority > lock->holder->base_priority
+                ? max_waiter_thread->priority
+                : lock->holder->base_priority;
     }
 
     lock->holder = NULL;
