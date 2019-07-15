@@ -77,7 +77,7 @@ void sema_down(struct semaphore *sema) {
         list_push_back(&sema->waiters, &thread_current()->elem);
         thread_block();
     }
-
+    sema->value--;
     intr_set_level(old_level);
 }
 
@@ -196,7 +196,7 @@ void lock_acquire(struct lock *lock) {
     enum intr_level old_level = intr_disable();
 
     // Start by seeing if lock is available
-    bool success = lock_try_acquire(lock);
+    bool success = sema_try_down(&lock->semaphore);
 
     // If not successfull, start donating priotity
     if (!success) {
@@ -208,14 +208,11 @@ void lock_acquire(struct lock *lock) {
         // Priority donation chaining
         chain_priority(curr_thread, lock_holder);
 
-        // printf("In lock_acquire, lock holder thread is %s, has priority% d\n
-        // ",
-        //        lock_holder->name, lock_holder->priority);
-
         sema_down(&lock->semaphore);
-        lock->holder = thread_current();
+        curr_thread->needs_lock = NULL;
     }
 
+    lock->holder = thread_current();
     intr_set_level(old_level);
 }
 
@@ -223,6 +220,12 @@ void lock_acquire(struct lock *lock) {
 void chain_priority(struct thread *curr_thread, struct thread *lock_holder) {
     while (curr_thread->priority > lock_holder->priority) {
         lock_holder->priority = curr_thread->priority;
+        while (lock_holder->priority != curr_thread->priority) {
+        }
+        while (lock_holder->priority != curr_thread->priority) {
+        }
+        while (lock_holder->priority != curr_thread->priority) {
+        }
 
         if (lock_holder->needs_lock == NULL) {
             break;
