@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
+#include "devices/timer.h"
 #include "threads/flags.h"
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
@@ -58,6 +59,8 @@ static unsigned thread_ticks; /* # of timer ticks since last yield. */
    Controlled by kernel command-line option "-o mlfqs". */
 bool thread_mlfqs;
 
+/* Load Average calculated every second */
+fixed_point_t load_average;
 static void kernel_thread(thread_func *, void *aux);
 
 static void idle(void *aux UNUSED);
@@ -89,9 +92,12 @@ void thread_init(void) {
     lock_init(&tid_lock);
     list_init(&ready_list);
     list_init(&all_list);
+    load_average = fix_int(0);
 
     /* Set up a thread structure for the running thread. */
     initial_thread = running_thread();
+    initial_thread->nice = 0;
+    initial_thread->recent_cpu = fix_int(0);
     init_thread(initial_thread, "main", PRI_DEFAULT);
     initial_thread->status = THREAD_RUNNING;
     initial_thread->tid = allocate_tid();
@@ -128,6 +134,33 @@ void thread_tick(void) {
 
     /* Enforce preemption. */
     if (++thread_ticks >= TIME_SLICE) intr_yield_on_return();
+
+    /* Write mlfq code here (the algorithm in the notion document) */
+    if (thread_mlfqs) {
+        running_thread()->recent_cpu =
+            fix_add(running_thread()->recent_cpu, fix_int(1));
+        if (timer_ticks() % TIMER_FREQ == 0) {
+            update_load_average();
+            thread_foreach(update_recent_cpu, 0);
+        }
+        if (timer_ticks() % 4 == 0) {
+            thread_foreach(update_priorities, 0);
+        }
+    }
+}
+
+/* Updates global load average */
+void update_load_average() {
+    // load_avg = (59/60) × load_avg + (1/60) × ready_threads
+
+    fixed_point_t a1 = fix_mul(fix_int(59), load_average);
+    fixed_point_t a2 = fix_div(a1, fix_int(60));
+    int ready_list_size = thread_current() == idle_thread
+                              ? (list_size(&ready_list))
+                              : (list_size(&ready_list)) + 1;
+    fixed_point_t ready_list_float_size = fix_int(ready_list_size);
+    fixed_point_t b2 = fix_div(ready_list_float_size, fix_int(60));
+    load_average = fix_add(a2, b2);
 }
 
 /* Prints thread statistics. */
@@ -284,6 +317,23 @@ void thread_yield(void) {
     intr_set_level(old_level);
 }
 
+/* updates recent cpu for thread*/
+void update_recent_cpu(struct thread *t, void *aux UNUSED) {
+    // recent_cpu = (2 × load_avg)/(2 × load_avg + 1) × recent_cpu + nice
+    fixed_point_t a = fix_mul(fix_int(2), load_average);
+    fixed_point_t b = fix_add(fix_mul(fix_int(2), load_average), fix_int(1));
+    t->recent_cpu =
+        fix_add(fix_mul(fix_div(a, b), t->recent_cpu), fix_int(t->nice));
+}
+
+/* updates priority for thread */
+void update_priorities(struct thread *t, void *aux UNUSED) {
+    // priority = PRI_MAX − (recent_cpu/4) − (nice × 2)
+    fixed_point_t primax = fix_int(PRI_MAX);
+    fixed_point_t x = fix_sub(primax, fix_div(t->recent_cpu, fix_int(4)));
+    t->priority = fix_trunc(fix_sub(x, fix_mul(fix_int(t->nice), fix_int(2))));
+}
+
 /* Invoke function 'func' on all threads, passing along 'aux'.
    This function must be called with interrupts off. */
 void thread_foreach(thread_action_func *func, void *aux) {
@@ -325,25 +375,20 @@ void thread_set_priority(int new_priority) {
 int thread_get_priority(void) { return thread_current()->priority; }
 
 /* Sets the current thread's nice value to NICE. */
-void thread_set_nice(int nice UNUSED) { /* Not yet implemented. */
-}
+void thread_set_nice(int nice UNUSED) { thread_current()->nice = nice; }
+
 
 /* Returns the current thread's nice value. */
-int thread_get_nice(void) {
-    /* Not yet implemented. */
-    return 0;
-}
+int thread_get_nice(void) { return thread_current()->nice; }
 
 /* Returns 100 times the system load average. */
 int thread_get_load_avg(void) {
-    /* Not yet implemented. */
-    return 0;
+    return fix_round(fix_scale(load_average, 100));
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int thread_get_recent_cpu(void) {
-    /* Not yet implemented. */
-    return 0;
+    return fix_round(fix_scale(thread_current()->recent_cpu, 100));
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -422,6 +467,8 @@ static void init_thread(struct thread *t, const char *name, int priority) {
     t->stack = (uint8_t *)t + PGSIZE;
     t->priority = priority;
     t->base_priority = priority;
+    t->nice = running_thread()->nice;
+    t->recent_cpu = running_thread()->recent_cpu;
     t->needs_lock = NULL;
     list_init(&t->held_locks);
     t->magic = THREAD_MAGIC;
