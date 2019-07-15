@@ -81,7 +81,6 @@ typedef int tid_t;
    only because they are mutually exclusive: only a thread in the
    ready state is on the run queue, whereas only a thread in the
    blocked state is on a semaphore wait list. */
-<<<<<<< HEAD
 struct thread
 {
   /* Owned by thread.c. */
@@ -99,22 +98,6 @@ struct thread
 
   /* Shared between thread.c and synch.c. */
   struct list_elem elem; /* List element. */
-=======
-struct thread {
-    /* Owned by thread.c. */
-    tid_t tid;                 /* Thread identifier. */
-    enum thread_status status; /* Thread state. */
-    char name[16];             /* Name (for debugging purposes). */
-    uint8_t *stack;            /* Saved stack pointer. */
-    int priority;              /* Priority. */
-    int base_priority;
-    struct list_elem allelem;  /* List element for all threads list. */
-    int64_t wake_up_tick;      /* Tick time for thread to wake up */
-    struct list_elem nap_elem; /* List element for nap room list */
-
-    /* Shared between thread.c and synch.c. */
-    struct list_elem elem; /* List element. */
->>>>>>> b54c65c47d4e4c43b9f8f77a3f14c28cffcdc0df
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -152,6 +135,8 @@ void thread_yield(void);
 /* Performs some operation on thread t, given auxiliary data AUX. */
 typedef void thread_action_func(struct thread *t, void *aux);
 void thread_foreach(thread_action_func *, void *);
+void update_recent_cpu(struct thread *t, void *aux );
+void update_priorities(struct thread *t, void *aux );
 
 int thread_get_priority(void);
 void thread_set_priority(int);
