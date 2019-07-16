@@ -42,6 +42,8 @@ static bool priority_less(const struct list_elem *a_,
     return a->priority < b->priority;
 }
 
+/* Used by lock_release(), determines max waiting thread between all waiters in
+ * all locks */
 static bool priority_locks(const struct list_elem *a_,
                            const struct list_elem *b_, void *aux UNUSED) {
     const struct lock *a = list_entry(a_, struct lock, held_lock_elem);
@@ -130,19 +132,15 @@ void sema_up(struct semaphore *sema) {
 
     ASSERT(sema != NULL);
 
-    // int new_priority = thread_current()->priority;
     old_level = intr_disable();
     if (!list_empty(&sema->waiters)) {
         struct list_elem *max_waiter =
             list_max(&sema->waiters, priority_less, NULL);
         list_remove(max_waiter);
-        // new_priority = list_entry(max_waiter, struct thread, elem)->priority;
         thread_unblock(list_entry(max_waiter, struct thread, elem));
     }
     sema->value++;
-    // if (new_priority > thread_current()->priority) { ! Passes mlsqf block
     thread_yield();
-    // }
     intr_set_level(old_level);
 }
 
@@ -238,7 +236,10 @@ void lock_acquire(struct lock *lock) {
     intr_set_level(old_level);
 }
 
-/* Pre condition: Lock-holder exisits */
+/* Pre condition: Lock-holder exisits
+    Iteratively donates current thread's priotity to thead currently holding
+   lock.
+*/
 void chain_priority(struct thread *curr_thread, struct thread *lock_holder) {
     while (curr_thread->priority > lock_holder->priority) {
         lock_holder->priority = curr_thread->priority;
@@ -276,7 +277,7 @@ bool lock_try_acquire(struct lock *lock) {
    An interrupt handler cannot acquire a lock, so it does not
    make sense to try to release a lock within an interrupt
    handler.
-   TODO: Update for priority donations releasing
+
    */
 void lock_release(struct lock *lock) {
     ASSERT(lock != NULL);
@@ -287,6 +288,9 @@ void lock_release(struct lock *lock) {
     if (list_empty(&thread_current()->held_locks)) {
         lock->holder->priority = lock->holder->base_priority;
     } else {
+        /* Here we must go through all our locks' waters, and figure out who
+        has the highest priority. We set our priority to the max of our original
+        or this max waiter */
         struct list_elem *max_lock_elem =
             list_max(&thread_current()->held_locks, priority_locks, NULL);
         struct lock *max_lock =
@@ -298,6 +302,7 @@ void lock_release(struct lock *lock) {
         struct thread *max_waiter_thread =
             list_entry(max_waiter_elem, struct thread, elem);
 
+        /* Decide max betwween our original (base_pritoity) and max_water */
         lock->holder->priority =
             max_waiter_thread->priority > lock->holder->base_priority
                 ? max_waiter_thread->priority
