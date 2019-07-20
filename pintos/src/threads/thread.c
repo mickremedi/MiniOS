@@ -150,7 +150,7 @@ void thread_tick(void) {
 }
 
 /* Updates global load average */
-void update_load_average() {
+void update_load_average(void) {
     // load_avg = (59/60) × load_avg + (1/60) × ready_threads
 
     fixed_point_t a1 = fix_mul(fix_int(59), load_average);
@@ -366,9 +366,12 @@ void thread_set_priority(int new_priority) {
         if (oldbase == thread_current()->priority) {
             thread_current()->priority = new_priority;
         }
-        thread_yield();
     }
     intr_set_level(old_level);
+
+    if (old_level == INTR_ON) {
+        thread_yield();
+    }
 }
 
 /* Returns the current thread's priority. */
@@ -376,7 +379,6 @@ int thread_get_priority(void) { return thread_current()->priority; }
 
 /* Sets the current thread's nice value to NICE. */
 void thread_set_nice(int nice UNUSED) { thread_current()->nice = nice; }
-
 
 /* Returns the current thread's nice value. */
 int thread_get_nice(void) { return thread_current()->nice; }

@@ -49,10 +49,13 @@ static bool priority_locks(const struct list_elem *a_,
     const struct lock *a = list_entry(a_, struct lock, held_lock_elem);
     const struct lock *b = list_entry(b_, struct lock, held_lock_elem);
 
+    struct list waiters_a = a->semaphore.waiters;
+    struct list waiters_b = b->semaphore.waiters;
+
     struct list_elem *max_waiter_elem_a =
-        list_max(&a->semaphore.waiters, priority_less, NULL);
+        list_max(&waiters_a, priority_less, NULL);
     struct list_elem *max_waiter_elem_b =
-        list_max(&b->semaphore.waiters, priority_less, NULL);
+        list_max(&waiters_b, priority_less, NULL);
 
     struct thread *max_waiter_a =
         list_entry(max_waiter_elem_a, struct thread, elem);
@@ -140,8 +143,11 @@ void sema_up(struct semaphore *sema) {
         thread_unblock(list_entry(max_waiter, struct thread, elem));
     }
     sema->value++;
-    thread_yield();
     intr_set_level(old_level);
+
+    if (old_level == INTR_ON) {
+        thread_yield();
+    }
 }
 
 static void sema_test_helper(void *sema_);
@@ -339,10 +345,13 @@ static bool priority_sema(const struct list_elem *a_,
     const struct semaphore_elem *b =
         list_entry(b_, struct semaphore_elem, elem);
 
+    struct list waiters_a = a->semaphore.waiters;
+    struct list waiters_b = b->semaphore.waiters;
+
     struct list_elem *max_waiter_elem_a =
-        list_max(&a->semaphore.waiters, priority_less, NULL);
+        list_max(&waiters_a, priority_less, NULL);
     struct list_elem *max_waiter_elem_b =
-        list_max(&b->semaphore.waiters, priority_less, NULL);
+        list_max(&waiters_b, priority_less, NULL);
 
     struct thread *max_waiter_a =
         list_entry(max_waiter_elem_a, struct thread, elem);
