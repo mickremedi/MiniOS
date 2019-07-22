@@ -366,12 +366,9 @@ void thread_set_priority(int new_priority) {
         if (oldbase == thread_current()->priority) {
             thread_current()->priority = new_priority;
         }
-    }
-    intr_set_level(old_level);
-
-    if (old_level == INTR_ON) {
         thread_yield();
     }
+    intr_set_level(old_level);
 }
 
 /* Returns the current thread's priority. */
