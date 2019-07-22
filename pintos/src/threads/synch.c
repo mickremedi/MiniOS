@@ -146,7 +146,7 @@ void sema_up(struct semaphore *sema) {
         thread_unblock(list_entry(max_waiter, struct thread, elem));
     }
     sema->value++;
-    if (unblocked_priority > thread_current()->priority) {
+    if (!intr_context() && unblocked_priority > thread_current()->priority) {
         thread_yield();
     }
     intr_set_level(old_level);
