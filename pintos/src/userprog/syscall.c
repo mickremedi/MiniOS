@@ -19,4 +19,23 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
         printf("%s: exit(%d)\n", thread_name, args[1]);
         thread_exit();
     }
+
+    // if (args[0] == SYS_PRACTICE) {
+    //     char* endptr;
+    //     int i = strtol(args[1], endptr, 10);
+    //     f->eax = i;
+    //     return;
+    // }
+
+    // if (args[0] == SYS_HALT) {
+    //     shutdown_power_off();
+    //     NOT_REACHED();
+    // }
+
+    // if (args[0] == SYS_EXEC) {
+    //     char* file_name = args[1];
+    // }
+
+    // if (args[0] == SYS_WAIT) {
+    // }
 }
