@@ -38,8 +38,11 @@ tid_t process_execute(const char *file_name) {
     if (fn_copy == NULL) return TID_ERROR;
     strlcpy(fn_copy, file_name, PGSIZE);
 
+    char *saveptr;
+    char *token = strtok_r(file_name, " ", &saveptr);
+
     /* Create a new thread to execute FILE_NAME. */
-    tid = thread_create(file_name, PRI_DEFAULT, start_process, fn_copy);
+    tid = thread_create(token, PRI_DEFAULT, start_process, fn_copy);
     if (tid == TID_ERROR) palloc_free_page(fn_copy);
     return tid;
 }
@@ -95,7 +98,7 @@ static void start_process(void *file_name_) {
 
     /* Push argv address onto the stack */
     if_.esp -= sizeof(char *);
-    *(char **)if_.esp = if_.esp;
+    *(char **)if_.esp = if_.esp + 4;
 
     /* Push argc onto the stack */
     if_.esp -= sizeof(int);
@@ -103,6 +106,7 @@ static void start_process(void *file_name_) {
 
     /* Push an arbitrary return address on the stack */
     if_.esp -= sizeof(char *);
+    *(void **)if_.esp = NULL;
 
     palloc_free_page(file_name);
 
