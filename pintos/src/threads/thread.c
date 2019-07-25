@@ -8,13 +8,15 @@
 #include "threads/flags.h"
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
+#include "threads/malloc.h"
 #include "threads/palloc.h"
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
-#ifdef USERPROG
+
+// #ifdef USERPROG
 #include "userprog/process.h"
-#endif
+// #endif
 
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
@@ -201,6 +203,17 @@ tid_t thread_create(const char *name, int priority, thread_func *function,
     /* Initialize thread. */
     init_thread(t, name, priority);
     tid = t->tid = allocate_tid();
+
+    /* Initialize process info struct */
+    // #ifdef USERPROG
+    struct babysitter *b = malloc(sizeof(struct babysitter));
+    sema_init(&b->sema_loading, 0);
+    list_push_front(&running_thread()->children, &b->child_elem);
+    b->tid = t->tid;
+    b->load_success = false;
+    b->exit_code = -1;
+    t->babysitter = b;
+    // #endif
 
     /* Stack frame for kernel_thread(). */
     kf = alloc_frame(t, sizeof *kf);
@@ -470,6 +483,7 @@ static void init_thread(struct thread *t, const char *name, int priority) {
     t->recent_cpu = running_thread()->recent_cpu;
     t->needs_lock = NULL;
     list_init(&t->held_locks);
+    list_init(&t->children);
     t->magic = THREAD_MAGIC;
 
     old_level = intr_disable();
@@ -479,7 +493,6 @@ static void init_thread(struct thread *t, const char *name, int priority) {
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
    returns a pointer to the frame's base.
-   ! RECURSION!!!
    */
 static void *alloc_frame(struct thread *t, size_t size) {
     /* Stack data is always allocated in word-size units. */

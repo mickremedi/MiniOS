@@ -22,6 +22,7 @@
 static struct semaphore temporary;
 static thread_func start_process NO_RETURN;
 static bool load(const char *cmdline, void (**eip)(void), void **esp);
+struct babysitter *getChildBabySitter(tid_t tid);
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -31,7 +32,6 @@ tid_t process_execute(const char *file_name) {
     char *fn_copy;
     tid_t tid;
 
-    sema_init(&temporary, 0);
     /* Make a copy of FILE_NAME.
        Otherwise there's a race between the caller and load(). */
     fn_copy = palloc_get_page(0);
@@ -44,7 +44,25 @@ tid_t process_execute(const char *file_name) {
     /* Create a new thread to execute FILE_NAME. */
     tid = thread_create(token, PRI_DEFAULT, start_process, fn_copy);
     if (tid == TID_ERROR) palloc_free_page(fn_copy);
-    return tid;
+
+    /* If no error when building child, wait for child to finish loading */
+    struct babysitter *babysitter = getChildBabySitter(tid);
+    sema_down(&babysitter->sema_loading);
+
+    return babysitter->load_success ? tid : -1;
+}
+
+/* Returns current thread's child with the associated tid */
+struct babysitter *getChildBabySitter(tid_t tid) {
+    struct list *listy = &thread_current()->children;
+    struct list_elem *l;
+    for (l = list_begin(listy); l != list_end(listy); l = list_next(l)) {
+        struct babysitter *curr = list_entry(l, struct babysitter, child_elem);
+        if (curr->tid == tid) {
+            return curr;
+        }
+    }
+    return NULL;
 }
 
 /* A thread function that loads a user process and starts it
@@ -110,6 +128,9 @@ static void start_process(void *file_name_) {
 
     palloc_free_page(file_name);
 
+    thread_current()->babysitter->load_success = true;
+    sema_up(&thread_current()->babysitter->sema_loading);
+
     /* Start the user process by simulating a return from an
        interrupt, implemented by intr_exit (in
        threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -129,9 +150,13 @@ static void start_process(void *file_name_) {
 
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
-int process_wait(tid_t child_tid UNUSED) {
-    sema_down(&temporary);
-    return 0;
+int process_wait(tid_t child_tid) {
+    struct babysitter *babysitter = getChildBabySitter(child_tid);
+    if (babysitter != NULL) {
+        sema_down(&babysitter->sema_loading);
+        list_remove(&babysitter->child_elem);
+    }
+    return babysitter != NULL ? babysitter->exit_code : -1;
 }
 
 /* Free the current process's resources. */
@@ -154,7 +179,14 @@ void process_exit(void) {
         pagedir_activate(NULL);
         pagedir_destroy(pd);
     }
-    sema_up(&temporary);
+
+    while (!list_empty(&cur->children)) {
+        free(list_entry(list_pop_front(&cur->children), struct babysitter,
+                        child_elem));
+    }
+
+    printf("%s: exit(%d)\n", cur->name, cur->babysitter->exit_code);
+    sema_up(&thread_current()->babysitter->sema_loading);
 }
 
 /* Sets up the CPU for running user code in the current
