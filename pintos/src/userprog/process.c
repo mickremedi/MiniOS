@@ -11,6 +11,7 @@
 #include "threads/flags.h"
 #include "threads/init.h"
 #include "threads/interrupt.h"
+#include "threads/malloc.h"
 #include "threads/palloc.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
@@ -19,7 +20,7 @@
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
 
-static struct semaphore temporary;
+// static struct semaphore temporary;
 static thread_func start_process NO_RETURN;
 static bool load(const char *cmdline, void (**eip)(void), void **esp);
 struct babysitter *getChildBabySitter(tid_t tid);
@@ -38,12 +39,14 @@ tid_t process_execute(const char *file_name) {
     if (fn_copy == NULL) return TID_ERROR;
     strlcpy(fn_copy, file_name, PGSIZE);
 
-    char *saveptr;
-    char *token = strtok_r(file_name, " ", &saveptr);
+    int first_arg_len = strcspn(file_name, " ") + 1;
+    char *token = malloc(first_arg_len);
+    strlcpy(token, file_name, first_arg_len);
 
     /* Create a new thread to execute FILE_NAME. */
     tid = thread_create(token, PRI_DEFAULT, start_process, fn_copy);
     if (tid == TID_ERROR) palloc_free_page(fn_copy);
+    free(token);
 
     /* If no error when building child, wait for child to finish loading */
     struct babysitter *babysitter = getChildBabySitter(tid);
