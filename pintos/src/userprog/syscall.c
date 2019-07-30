@@ -30,7 +30,6 @@ static void syscall_handler(struct intr_frame *);
 struct file_info *get_file(int fd);
 int add_fd(struct file *file, const char *file_name);
 bool valid_pointer(void *ptr, size_t size);
-void close_all_files(tid_t tid);
 
 struct file_info *get_file(int fd) {
     struct list_elem *e;
@@ -111,7 +110,6 @@ static void syscall_handler(struct intr_frame *f UNUSED) {
     /* void exit (int status)  */
     if (args[0] == SYS_EXIT) {
         thread_current()->babysitter->exit_code = args[1];
-        close_all_files(thread_current()->tid);
         f->eax = args[1];
         thread_exit();
     }
@@ -162,7 +160,7 @@ static void syscall_handler(struct intr_frame *f UNUSED) {
 
     /* int open(const char *file) */
     if (args[0] == SYS_OPEN) {
-        lock_acquire(&io_lock);
+        // lock_acquire(&io_lock);
 
         const char *file_name = (const char *)args[1];
         if (!valid_pointer((void *)file_name, sizeof(char *))) {
@@ -176,7 +174,7 @@ static void syscall_handler(struct intr_frame *f UNUSED) {
             f->eax = add_fd(file, file_name);
         }
 
-        lock_release(&io_lock);
+        // lock_release(&io_lock);
         return;
     }
 

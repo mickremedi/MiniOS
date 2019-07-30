@@ -18,6 +18,7 @@
 #include "threads/vaddr.h"
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
+#include "userprog/syscall.h"
 #include "userprog/tss.h"
 
 // static struct semaphore temporary;
@@ -189,6 +190,8 @@ void process_exit(void) {
         free(list_entry(list_pop_front(&cur->children), struct babysitter,
                         child_elem));
     }
+
+    close_all_files(cur->tid);
 
     printf("%s: exit(%d)\n", cur->name, cur->babysitter->exit_code);
     sema_up(&thread_current()->babysitter->sema_loading);
