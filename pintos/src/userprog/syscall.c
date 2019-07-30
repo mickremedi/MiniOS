@@ -13,6 +13,7 @@
 #include "threads/vaddr.h"
 #include "userprog/pagedir.h"
 #include "userprog/process.h"
+#include "devices/input.h"
 
 struct lock io_lock;
 static struct list file_list;
@@ -195,6 +196,31 @@ static void syscall_handler(struct intr_frame *f UNUSED) {
             }
             putbuf(buffer, size);
             f->eax = (int)args[3];
+            lock_release(&io_lock);
+            return;
+        }
+        lock_release(&io_lock);
+    }
+
+    /* Read from standard input */
+    if (args[0] == SYS_READ) {
+        lock_acquire(&io_lock);
+        int fd = (int)args[1];
+        uint8_t *buffer = (uint8_t *)args[2];
+        if (!valid_pointer(buffer, sizeof(char *))) {
+            thread_exit();
+        }
+        unsigned size = (unsigned)args[3]; 
+        if(fd == 0) {
+            size_t count = 0;
+            while( count < size ){
+                buffer[count] = input_getc();
+                if (buffer[count] == '\n'){
+                    break;
+                }
+                count++;
+            }
+            f->eax = count;
             lock_release(&io_lock);
             return;
         }
