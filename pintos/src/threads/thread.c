@@ -212,6 +212,7 @@ tid_t thread_create(const char *name, int priority, thread_func *function,
     b->tid = t->tid;
     b->load_success = false;
     b->exit_code = -1;
+    b->file = NULL;
     t->babysitter = b;
     // #endif
 

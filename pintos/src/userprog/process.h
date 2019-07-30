@@ -17,6 +17,7 @@ struct babysitter {
     tid_t tid;                     /* Thread identifier. */
     int exit_code;
     bool load_success;
+    struct file *file;
 };
 
 #endif /* userprog/process.h */

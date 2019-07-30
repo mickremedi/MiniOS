@@ -19,6 +19,7 @@ static struct list file_list;
 int global_fd;
 
 struct file_info {
+    tid_t owner;
     int fd;
     struct file *file;  // this holds the file
     struct list_elem elem;
@@ -29,13 +30,14 @@ static void syscall_handler(struct intr_frame *);
 struct file_info *get_file(int fd);
 int add_fd(struct file *file, const char *file_name);
 bool valid_pointer(void *ptr, size_t size);
+void close_all_files(tid_t tid);
 
 struct file_info *get_file(int fd) {
     struct list_elem *e;
     for (e = list_begin(&file_list); e != list_end(&file_list);
          e = list_next(e)) {
         struct file_info *f = list_entry(e, struct file_info, elem);
-        if (f->fd == fd) {
+        if (f->fd == fd && f->owner == thread_current()->tid) {
             return f;
         }
     }
@@ -47,8 +49,22 @@ int add_fd(struct file *file, const char *file_name) {
     file_node->file = file;
     file_node->file_name = file_name;
     file_node->fd = global_fd++;
+    file_node->owner = thread_current()->tid;
     list_push_back(&file_list, &file_node->elem);
     return file_node->fd;
+}
+
+void close_all_files(tid_t tid) {
+    struct list_elem *e = list_begin(&file_list);
+    while (e != list_end(&file_list)) {
+        struct file_info *f = list_entry(e, struct file_info, elem);
+        e = list_next(e);
+        if (f->owner == tid) {
+            file_close(f->file);
+            list_remove(&f->elem);
+            free(f);
+        }
+    }
 }
 
 bool valid_pointer(void *ptr, size_t size) {
@@ -95,7 +111,7 @@ static void syscall_handler(struct intr_frame *f UNUSED) {
     /* void exit (int status)  */
     if (args[0] == SYS_EXIT) {
         thread_current()->babysitter->exit_code = args[1];
-
+        close_all_files(thread_current()->tid);
         f->eax = args[1];
         thread_exit();
     }

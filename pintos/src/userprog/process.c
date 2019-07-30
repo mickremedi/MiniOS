@@ -183,6 +183,8 @@ void process_exit(void) {
         pagedir_destroy(pd);
     }
 
+    file_close(cur->babysitter->file);
+
     while (!list_empty(&cur->children)) {
         free(list_entry(list_pop_front(&cur->children), struct babysitter,
                         child_elem));
@@ -297,6 +299,9 @@ bool load(const char *file_name, void (**eip)(void), void **esp) {
         goto done;
     }
 
+    t->babysitter->file = file;
+    file_deny_write(file);
+
     /* Read and verify executable header. */
     if (file_read(file, &ehdr, sizeof ehdr) != sizeof ehdr ||
         memcmp(ehdr.e_ident, "\177ELF\1\1\1", 7) || ehdr.e_type != 2 ||
@@ -368,7 +373,6 @@ bool load(const char *file_name, void (**eip)(void), void **esp) {
 
 done:
     /* We arrive here whether the load is successful or not. */
-    file_close(file);
     return success;
 }
 
