@@ -14,9 +14,9 @@
 #include "threads/synch.h"
 #include "threads/vaddr.h"
 
-// #ifdef USERPROG
+#ifdef USERPROG
 #include "userprog/process.h"
-// #endif
+#endif
 
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
@@ -204,8 +204,8 @@ tid_t thread_create(const char *name, int priority, thread_func *function,
     init_thread(t, name, priority);
     tid = t->tid = allocate_tid();
 
-    /* Initialize process info struct */
-    // #ifdef USERPROG
+/* Initialize process info struct */
+#ifdef USERPROG
     struct babysitter *b = malloc(sizeof(struct babysitter));
     sema_init(&b->sema_loading, 0);
     list_push_front(&running_thread()->children, &b->child_elem);
@@ -214,7 +214,7 @@ tid_t thread_create(const char *name, int priority, thread_func *function,
     b->exit_code = -1;
     b->file = NULL;
     t->babysitter = b;
-    // #endif
+#endif
 
     /* Stack frame for kernel_thread(). */
     kf = alloc_frame(t, sizeof *kf);

@@ -102,12 +102,12 @@ struct thread {
     /* Shared between thread.c and synch.c. */
     struct list_elem elem; /* List element. */
 
-    // #ifdef USERPROG
+#ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;             /* Page directory. */
     struct list children;          /* List to store all children threads */
     struct babysitter *babysitter; /* Struct to store baby sitter's info */
-    // #endif
+#endif
 
     /* Owned by thread.c. */
     unsigned magic; /* Detects stack overflow. */
