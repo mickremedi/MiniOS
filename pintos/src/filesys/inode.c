@@ -6,57 +6,8 @@
 #include <string.h>
 #include "filesys/filesys.h"
 #include "filesys/free-map.h"
+#include "filesys/inode_utils.h"
 #include "threads/malloc.h"
-
-/* Identifies an inode. */
-#define INODE_MAGIC 0x494e4f44
-#define NUM_DIRECT 121
-#define NUM_INDIRECT 128
-
-/* On-disk inode.
-   Must be exactly BLOCK_SECTOR_SIZE bytes long. */
-struct inode_disk {
-    off_t length;       /* File size in bytes. */
-    int num_sectors;    /* Number of sectors allocated */
-    bool is_directory;  /* States if a file is a directory */
-    int directory_size; /* The number of files in the directory */
-    block_sector_t direct[NUM_DIRECT]; /* Direct pointers. */
-    block_sector_t indirect;           /* Indirect pointer. */
-    block_sector_t doubly_indirect;    /* Doubly indirect pointer. */
-    unsigned magic;                    /* Magic number. */
-};
-
-/* Returns the number of sectors to allocate for an inode SIZE
-   bytes long. */
-static inline size_t bytes_to_sectors(off_t size) {
-    return DIV_ROUND_UP(size, BLOCK_SECTOR_SIZE);
-}
-
-/* In-memory inode. */
-struct inode {
-    struct list_elem elem;  /* Element in inode list. */
-    block_sector_t sector;  /* Sector number of disk location. */
-    int open_cnt;           /* Number of openers. */
-    bool removed;           /* True if deleted, false otherwise. */
-    int deny_write_cnt;     /* 0: writes ok, >0: deny writes. */
-    struct inode_disk data; /* Inode conent. */
-};
-
-bool allocate_nonconsec(size_t count, block_sector_t *directPointers,
-                        size_t start);
-bool inode_disk_extend(struct inode_disk *disk_inode, size_t size);
-
-/* Returns the block device sector that contains byte offset POS
-   within INODE.
-   Returns -1 if INODE does not contain data for a byte at offset
-   POS. */
-static block_sector_t byte_to_sector(const struct inode *inode, off_t pos) {
-    ASSERT(inode != NULL);
-    if (pos < inode->data.length)
-        return inode->data.direct[0] + pos / BLOCK_SECTOR_SIZE;
-    else
-        return -1;
-}
 
 /* List of open inodes, so that opening a single inode twice
    returns the same `struct inode'. */
@@ -82,10 +33,9 @@ bool inode_create(block_sector_t sector, off_t length) {
 
     disk_inode = calloc(1, sizeof *disk_inode);
     if (disk_inode != NULL) {
-        size_t sectors = bytes_to_sectors(length);
         disk_inode->length = 0;
+        disk_inode->num_sectors = 0;
         disk_inode->magic = INODE_MAGIC;
-        disk_inode->num_sectors = sectors;
         if (inode_disk_extend(disk_inode, length)) {
             block_write(fs_device, sector, disk_inode);
             success = true;
@@ -94,54 +44,6 @@ bool inode_create(block_sector_t sector, off_t length) {
 
     free(disk_inode);
     return success;
-}
-/* Allocates nonconsecutive blocks of memory from free map */
-bool allocate_nonconsec(size_t count, block_sector_t *direct_pointers,
-                        size_t start) {
-    size_t i = start;
-    while (i < count) {
-        bool success = free_map_allocate(1, &direct_pointers[i]);
-        if (!success) {
-            printf(
-                "HI THERE! I'M HAVING AN ISSUE :( PLEASE FIND ME IN "
-                "ALLOCATE_NONCONSEC");
-            return false;
-        }
-        i++;
-    }
-    return true;
-}
-
-bool inode_disk_extend(struct inode_disk *disk_inode, size_t size) {
-    size_t original_num_sectors = bytes_to_sectors(disk_inode->length);
-    size_t new_num_sectors = bytes_to_sectors(disk_inode->length + size);
-
-    //! This is temporary so that it only implements direct pointers
-    if (new_num_sectors > NUM_DIRECT) {
-        return false;
-    }
-
-    /* Checks if we have enough space to allocate sectors  */
-    size_t needed_sectors = new_num_sectors - original_num_sectors;
-    if (!free_map_available_space(needed_sectors)) {
-        return false;
-    }
-
-    if (needed_sectors <= 0 ||
-        !allocate_nonconsec(needed_sectors, disk_inode->direct,
-                            original_num_sectors)) {
-        return false;
-    }
-    static char zeros[BLOCK_SECTOR_SIZE];
-
-    size_t i;
-    for (i = original_num_sectors; i < new_num_sectors; i++) {
-        block_write(fs_device, disk_inode->direct[i], zeros);
-    }
-
-    disk_inode->length += size;
-
-    return true;
 }
 
 /* Reads an inode from SECTOR
@@ -152,8 +54,7 @@ struct inode *inode_open(block_sector_t sector) {
     struct inode *inode;
 
     /* Check whether this inode is already open. */
-    for (e = list_begin(&open_inodes); e != list_end(&open_inodes);
-         e = list_next(e)) {
+    for (e = list_begin(&open_inodes); e != list_end(&open_inodes); e = list_next(e)) {
         inode = list_entry(e, struct inode, elem);
         if (inode->sector == sector) {
             inode_reopen(inode);
@@ -182,9 +83,7 @@ struct inode *inode_reopen(struct inode *inode) {
 }
 
 /* Returns INODE's inode number. */
-block_sector_t inode_get_inumber(const struct inode *inode) {
-    return inode->sector;
-}
+block_sector_t inode_get_inumber(const struct inode *inode) { return inode->sector; }
 
 /* Closes INODE and writes it to disk.
    If this was the last reference to INODE, frees its memory.
@@ -201,8 +100,7 @@ void inode_close(struct inode *inode) {
         /* Deallocate blocks if removed. */
         if (inode->removed) {
             free_map_release(inode->sector, 1);
-            free_map_release(inode->data.direct[0],
-                             bytes_to_sectors(inode->data.length));
+            release_nonconsec(bytes_to_sectors(inode->data.length), inode->data.direct);
         }
 
         free(inode);
@@ -219,8 +117,7 @@ void inode_remove(struct inode *inode) {
 /* Reads SIZE bytes from INODE into BUFFER, starting at position OFFSET.
    Returns the number of bytes actually read, which may be less
    than SIZE if an error occurs or end of file is reached. */
-off_t inode_read_at(struct inode *inode, void *buffer_, off_t size,
-                    off_t offset) {
+off_t inode_read_at(struct inode *inode, void *buffer_, off_t size, off_t offset) {
     uint8_t *buffer = buffer_;
     off_t bytes_read = 0;
     uint8_t *bounce = NULL;
@@ -268,8 +165,7 @@ off_t inode_read_at(struct inode *inode, void *buffer_, off_t size,
    less than SIZE if end of file is reached or an error occurs.
    (Normally a write at end of file would extend the inode, but
    growth is not yet implemented.) */
-off_t inode_write_at(struct inode *inode, const void *buffer_, off_t size,
-                     off_t offset) {
+off_t inode_write_at(struct inode *inode, const void *buffer_, off_t size, off_t offset) {
     const uint8_t *buffer = buffer_;
     off_t bytes_written = 0;
     uint8_t *bounce = NULL;

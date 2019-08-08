@@ -1,11 +1,40 @@
 #ifndef FILESYS_INODE_H
 #define FILESYS_INODE_H
 
+#include <list.h>
 #include <stdbool.h>
 #include "devices/block.h"
 #include "filesys/off_t.h"
 
 struct bitmap;
+
+/* Identifies an inode. */
+#define INODE_MAGIC 0x494e4f44
+#define NUM_DIRECT 121
+#define NUM_INDIRECT 128
+
+/* On-disk inode.
+   Must be exactly BLOCK_SECTOR_SIZE bytes long. */
+struct inode_disk {
+    off_t length;                      /* File size in bytes. */
+    int num_sectors;                   /* Number of sectors allocated */
+    bool is_directory;                 /* States if a file is a directory */
+    int directory_size;                /* The number of files in the directory */
+    block_sector_t direct[NUM_DIRECT]; /* Direct pointers. */
+    block_sector_t indirect;           /* Indirect pointer. */
+    block_sector_t doubly_indirect;    /* Doubly indirect pointer. */
+    unsigned magic;                    /* Magic number. */
+};
+
+/* In-memory inode. */
+struct inode {
+    struct list_elem elem;  /* Element in inode list. */
+    block_sector_t sector;  /* Sector number of disk location. */
+    int open_cnt;           /* Number of openers. */
+    bool removed;           /* True if deleted, false otherwise. */
+    int deny_write_cnt;     /* 0: writes ok, >0: deny writes. */
+    struct inode_disk data; /* Inode conent. */
+};
 
 void inode_init(void);
 bool inode_create(block_sector_t, off_t);
