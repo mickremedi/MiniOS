@@ -55,7 +55,7 @@ bool inode_disk_extend(struct inode_disk *disk_inode, size_t size) {
 
     /* Checks to see how many indirect blocks we need to allocate */
     size_t needed_indirect_blocks =
-        needed_blocks > NUM_DIRECT ? (needed_blocks - NUM_DIRECT) / NUM_INDIRECT : 0;
+        needed_blocks > NUM_DIRECT ? DIV_ROUND_UP(needed_blocks - NUM_DIRECT, NUM_INDIRECT) : 0;
 
     /* Checks if we need to allocate space for the doubly indirect pointers block */
     size_t needed_doubly_indirect_blocks = needed_blocks > NUM_DIRECT + NUM_INDIRECT ? 1 : 0;
@@ -156,6 +156,8 @@ size_t allocate_indirect_blocks(struct inode_disk *disk_inode, size_t remaining_
         zero_and_write_block(indirect_list[i]);
     }
 
+    block_write(fs_device, disk_inode->indirect, indirect_list);
+
     /* Updates num_sectors with recently allocated blocks */
     disk_inode->num_sectors += num_to_add;
 
@@ -217,6 +219,8 @@ size_t allocate_doubly_indirect_blocks(struct inode_disk *disk_inode, size_t rem
             zero_and_write_block(subblock_list[i]);
         }
 
+        block_write(fs_device, doubly_indirect_list[curr_indirect_block], subblock_list);
+
         /* Updates num_sectors with recently allocated blocks */
         disk_inode->num_sectors += num_to_add;
 
@@ -226,6 +230,13 @@ size_t allocate_doubly_indirect_blocks(struct inode_disk *disk_inode, size_t rem
         curr_indirect_block++;
     }
 
+    block_write(fs_device, disk_inode->doubly_indirect, doubly_indirect_list);
+
     /* Returns how many blocks are left to allocate */
     return remaining_blocks;
+}
+
+void release_inode(struct inode *inode) {
+    release_nonconsec(bytes_to_sectors(inode->data.length), inode->data.direct);
+    free_map_release(inode->sector, 1);
 }

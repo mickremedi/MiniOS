@@ -99,8 +99,7 @@ void inode_close(struct inode *inode) {
 
         /* Deallocate blocks if removed. */
         if (inode->removed) {
-            free_map_release(inode->sector, 1);
-            release_nonconsec(bytes_to_sectors(inode->data.length), inode->data.direct);
+            release_inode(inode);
         }
 
         free(inode);

@@ -33,4 +33,6 @@ size_t allocate_direct_blocks(struct inode_disk *disk_inode, size_t remaining_bl
 size_t allocate_indirect_blocks(struct inode_disk *disk_inode, size_t remaining_blocks);
 size_t allocate_doubly_indirect_blocks(struct inode_disk *disk_inode, size_t remaining_blocks);
 
+void release_inode(struct inode *inode);
+
 #endif /* filesys/inode_utils.h */
