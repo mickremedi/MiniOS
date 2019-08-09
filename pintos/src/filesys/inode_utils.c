@@ -38,7 +38,9 @@ bool allocate_nonconsec(size_t count, block_sector_t *block_list, size_t start) 
 void release_nonconsec(size_t count, block_sector_t *block_list) {
     size_t i = 0;
     while (i < count) {
-        free_map_release(block_list[i], 1);
+        if (block_list[i] != 0) {
+            free_map_release(block_list[i], 1);
+        }
         i++;
     }
 }
@@ -237,6 +239,36 @@ size_t allocate_doubly_indirect_blocks(struct inode_disk *disk_inode, size_t rem
 }
 
 void release_inode(struct inode *inode) {
-    release_nonconsec(bytes_to_sectors(inode->data.length), inode->data.direct);
+    /* Release Direct block content */
+    release_nonconsec(NUM_DIRECT, inode->data.direct);
+
+    /* Release Indirect block content */
+    if (inode->data.indirect != 0) {
+        block_sector_t indirect_list[NUM_INDIRECT];
+        block_read(fs_device, inode->data.indirect, indirect_list);
+        release_nonconsec(NUM_INDIRECT, indirect_list);
+
+        free_map_release(inode->data.indirect, 1);
+    }
+
+    /* Release doubly indirect block content */
+    if (inode->data.doubly_indirect != 0) {
+        block_sector_t double_indirect_list[NUM_INDIRECT];
+        block_read(fs_device, inode->data.doubly_indirect, double_indirect_list);
+
+        int i;
+        for (i = 0; i < NUM_INDIRECT; i++) {
+            if (double_indirect_list[i] != 0) {
+                block_sector_t indirect_list[NUM_INDIRECT];
+                block_read(fs_device, inode->data.indirect, indirect_list);
+                release_nonconsec(NUM_INDIRECT, indirect_list);
+                free_map_release(inode->data.indirect, 1);
+            }
+        }
+
+        release_nonconsec(NUM_INDIRECT, double_indirect_list);
+        free_map_release(inode->data.doubly_indirect, 1);
+    }
+
     free_map_release(inode->sector, 1);
 }

@@ -171,6 +171,14 @@ off_t inode_write_at(struct inode *inode, const void *buffer_, off_t size, off_t
 
     if (inode->deny_write_cnt) return 0;
 
+    if (inode->data.length < offset + size) {
+        if (inode_disk_extend(&inode->data, size + offset - inode->data.length)) {
+            block_write(fs_device, inode->sector, &inode->data);
+        } else {
+            return 0;
+        }
+    }
+
     while (size > 0) {
         /* Sector to write, starting byte offset within sector. */
         block_sector_t sector_idx = byte_to_sector(inode, offset);
