@@ -1,6 +1,7 @@
 #ifndef FILESYS_FILE_H
 #define FILESYS_FILE_H
 
+#include "devices/block.h"
 #include "filesys/off_t.h"
 
 struct inode;
@@ -25,5 +26,9 @@ void file_allow_write(struct file *);
 void file_seek(struct file *, off_t);
 off_t file_tell(struct file *);
 off_t file_length(struct file *);
+
+/* File information. */
+block_sector_t file_isdir(struct file *file);
+int file_inumber(struct file *file);
 
 #endif /* filesys/file.h */

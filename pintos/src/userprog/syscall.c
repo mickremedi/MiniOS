@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <syscall-nr.h>
+#include "devices/input.h"
 #include "devices/shutdown.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
@@ -13,7 +14,6 @@
 #include "threads/vaddr.h"
 #include "userprog/pagedir.h"
 #include "userprog/process.h"
-#include "devices/input.h"
 
 struct lock io_lock;
 static struct list file_list;
@@ -34,8 +34,7 @@ bool valid_pointer(void *ptr, size_t size);
 
 struct file_info *get_file(int fd) {
     struct list_elem *e;
-    for (e = list_begin(&file_list); e != list_end(&file_list);
-         e = list_next(e)) {
+    for (e = list_begin(&file_list); e != list_end(&file_list); e = list_next(e)) {
         struct file_info *f = list_entry(e, struct file_info, elem);
         if (f->fd == fd && f->owner == thread_current()->tid) {
             return f;
@@ -68,8 +67,7 @@ void close_all_files(tid_t tid) {
 }
 
 bool valid_pointer(void *ptr, size_t size) {
-    if (!is_user_vaddr(ptr) ||
-        pagedir_get_page(thread_current()->pagedir, ptr) == NULL) {
+    if (!is_user_vaddr(ptr) || pagedir_get_page(thread_current()->pagedir, ptr) == NULL) {
         return false;
     }
     if (!is_user_vaddr(ptr + size) ||
@@ -132,6 +130,29 @@ static void syscall_handler(struct intr_frame *f UNUSED) {
         return;
     }
 
+    /* -----------DIRECTORY SYSCALLS----------- */
+
+    /* bool chdir(const char *dir) */
+    if (args[0] == SYS_CHDIR) {
+        const char *dir = (const char *)args[1];
+        if (!valid_pointer((void *)dir, sizeof(char *))) {
+            thread_exit();
+        }
+        f->eax = filesys_chdir(dir);
+        return;
+    }
+    /* bool mkdir(const char *dir) */
+    if (args[0] == SYS_MKDIR) {
+        lock_acquire(&io_lock);
+        const char *dir = (const char *)args[1];
+        if (!valid_pointer((void *)dir, sizeof(char *))) {
+            thread_exit();
+        }
+        f->eax = filesys_create(dir, 0, true);
+        lock_release(&io_lock);
+        return;
+    }
+
     /* -----------FILE SYSCALLS----------- */
 
     /* bool create(const char *file, unsigned initial_size) */
@@ -142,7 +163,7 @@ static void syscall_handler(struct intr_frame *f UNUSED) {
         if (!valid_pointer((void *)file_name, sizeof(char *))) {
             thread_exit();
         }
-        f->eax = filesys_create(file_name, size);
+        f->eax = filesys_create(file_name, size, false);
         lock_release(&io_lock);
         return;
     }
@@ -210,12 +231,12 @@ static void syscall_handler(struct intr_frame *f UNUSED) {
         if (!valid_pointer(buffer, sizeof(char *))) {
             thread_exit();
         }
-        unsigned size = (unsigned)args[3]; 
-        if(fd == 0) {
+        unsigned size = (unsigned)args[3];
+        if (fd == 0) {
             size_t count = 0;
-            while( count < size ){
+            while (count < size) {
                 buffer[count] = input_getc();
-                if (buffer[count] == '\n'){
+                if (buffer[count] == '\n') {
                     break;
                 }
                 count++;
@@ -292,6 +313,25 @@ static void syscall_handler(struct intr_frame *f UNUSED) {
         file_close(file_node->file);
         list_remove(&file_node->elem);
         free(file_node);
+        lock_release(&io_lock);
+        return;
+    }
+
+    /* bool readdir(int fd, char *name) */
+    if (args[0] == SYS_READDIR) {
+        return;
+    }
+    /* bool isdir(int fd) */
+    if (args[0] == SYS_ISDIR) {
+        lock_acquire(&io_lock);
+        f->eax = file_isdir(file_node->file);
+        lock_release(&io_lock);
+        return;
+    }
+    /* int inumber(int fd) */
+    if (args[0] == SYS_INUMBER) {
+        lock_acquire(&io_lock);
+        f->eax = file_inumber(file_node->file);
         lock_release(&io_lock);
         return;
     }

@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "devices/timer.h"
+#include "filesys/filesys.h"
 #include "threads/flags.h"
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
@@ -13,10 +14,7 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
-
-#ifdef USERPROG
 #include "userprog/process.h"
-#endif
 
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
@@ -101,6 +99,7 @@ void thread_init(void) {
     initial_thread->nice = 0;
     initial_thread->recent_cpu = fix_int(0);
     init_thread(initial_thread, "main", PRI_DEFAULT);
+    initial_thread->current_directory = ROOT_DIR_SECTOR;
     initial_thread->status = THREAD_RUNNING;
     initial_thread->tid = allocate_tid();
 }
@@ -139,8 +138,7 @@ void thread_tick(void) {
 
     /* Write mlfq code here (the algorithm in the notion document) */
     if (thread_mlfqs) {
-        running_thread()->recent_cpu =
-            fix_add(running_thread()->recent_cpu, fix_int(1));
+        running_thread()->recent_cpu = fix_add(running_thread()->recent_cpu, fix_int(1));
         if (timer_ticks() % TIMER_FREQ == 0) {
             update_load_average();
             thread_foreach(update_recent_cpu, 0);
@@ -157,9 +155,8 @@ void update_load_average(void) {
 
     fixed_point_t a1 = fix_mul(fix_int(59), load_average);
     fixed_point_t a2 = fix_div(a1, fix_int(60));
-    int ready_list_size = thread_current() == idle_thread
-                              ? (list_size(&ready_list))
-                              : (list_size(&ready_list)) + 1;
+    int ready_list_size =
+        thread_current() == idle_thread ? (list_size(&ready_list)) : (list_size(&ready_list)) + 1;
     fixed_point_t ready_list_float_size = fix_int(ready_list_size);
     fixed_point_t b2 = fix_div(ready_list_float_size, fix_int(60));
     load_average = fix_add(a2, b2);
@@ -167,8 +164,8 @@ void update_load_average(void) {
 
 /* Prints thread statistics. */
 void thread_print_stats(void) {
-    printf("Thread: %lld idle ticks, %lld kernel ticks, %lld user ticks\n",
-           idle_ticks, kernel_ticks, user_ticks);
+    printf("Thread: %lld idle ticks, %lld kernel ticks, %lld user ticks\n", idle_ticks,
+           kernel_ticks, user_ticks);
 }
 
 /* Creates a new kernel thread named NAME with the given initial
@@ -186,8 +183,7 @@ void thread_print_stats(void) {
    The code provided sets the new thread's `priority' member to
    PRIORITY, but no actual priority scheduling is implemented.
    Priority scheduling is the goal of Problem 1-3. */
-tid_t thread_create(const char *name, int priority, thread_func *function,
-                    void *aux) {
+tid_t thread_create(const char *name, int priority, thread_func *function, void *aux) {
     struct thread *t;
     struct kernel_thread_frame *kf;
     struct switch_entry_frame *ef;
@@ -204,8 +200,7 @@ tid_t thread_create(const char *name, int priority, thread_func *function,
     init_thread(t, name, priority);
     tid = t->tid = allocate_tid();
 
-/* Initialize process info struct */
-#ifdef USERPROG
+    /* Initialize process info struct */
     struct babysitter *b = malloc(sizeof(struct babysitter));
     sema_init(&b->sema_loading, 0);
     list_push_front(&running_thread()->children, &b->child_elem);
@@ -214,7 +209,9 @@ tid_t thread_create(const char *name, int priority, thread_func *function,
     b->exit_code = -1;
     b->file = NULL;
     t->babysitter = b;
-#endif
+
+    /* Set process directory to parent's directory */
+    t->current_directory = running_thread()->current_directory;
 
     /* Stack frame for kernel_thread(). */
     kf = alloc_frame(t, sizeof *kf);
@@ -336,8 +333,7 @@ void update_recent_cpu(struct thread *t, void *aux UNUSED) {
     // recent_cpu = (2 × load_avg)/(2 × load_avg + 1) × recent_cpu + nice
     fixed_point_t a = fix_mul(fix_int(2), load_average);
     fixed_point_t b = fix_add(fix_mul(fix_int(2), load_average), fix_int(1));
-    t->recent_cpu =
-        fix_add(fix_mul(fix_div(a, b), t->recent_cpu), fix_int(t->nice));
+    t->recent_cpu = fix_add(fix_mul(fix_div(a, b), t->recent_cpu), fix_int(t->nice));
 }
 
 /* updates priority for thread */
@@ -355,8 +351,7 @@ void thread_foreach(thread_action_func *func, void *aux) {
 
     ASSERT(intr_get_level() == INTR_OFF);
 
-    for (e = list_begin(&all_list); e != list_end(&all_list);
-         e = list_next(e)) {
+    for (e = list_begin(&all_list); e != list_end(&all_list); e = list_next(e)) {
         struct thread *t = list_entry(e, struct thread, allelem);
         func(t, aux);
     }
@@ -372,8 +367,7 @@ void thread_set_priority(int new_priority) {
     if (new_priority > thread_current()->priority) {
         thread_current()->priority = new_priority;
         if (thread_current()->needs_lock) {
-            chain_priority(thread_current(),
-                           thread_current()->needs_lock->holder);
+            chain_priority(thread_current(), thread_current()->needs_lock->holder);
         }
 
     } else if (new_priority < thread_current()->priority) {
@@ -395,14 +389,10 @@ void thread_set_nice(int nice UNUSED) { thread_current()->nice = nice; }
 int thread_get_nice(void) { return thread_current()->nice; }
 
 /* Returns 100 times the system load average. */
-int thread_get_load_avg(void) {
-    return fix_round(fix_scale(load_average, 100));
-}
+int thread_get_load_avg(void) { return fix_round(fix_scale(load_average, 100)); }
 
 /* Returns 100 times the current thread's recent_cpu value. */
-int thread_get_recent_cpu(void) {
-    return fix_round(fix_scale(thread_current()->recent_cpu, 100));
-}
+int thread_get_recent_cpu(void) { return fix_round(fix_scale(thread_current()->recent_cpu, 100)); }
 
 /* Idle thread.  Executes when no other thread is ready to run.
 
@@ -461,9 +451,7 @@ struct thread *running_thread(void) {
 }
 
 /* Returns true if T appears to point to a valid thread. */
-static bool is_thread(struct thread *t) {
-    return t != NULL && t->magic == THREAD_MAGIC;
-}
+static bool is_thread(struct thread *t) { return t != NULL && t->magic == THREAD_MAGIC; }
 
 /* Does basic initialization of T as a blocked thread named
    NAME. */
@@ -506,8 +494,8 @@ static void *alloc_frame(struct thread *t, size_t size) {
 
 /* Returns true if priority of A is less than priority of B, false
    otherwise. */
-static bool priority_less(const struct list_elem *a_,
-                          const struct list_elem *b_, void *aux UNUSED) {
+static bool priority_less(const struct list_elem *a_, const struct list_elem *b_,
+                          void *aux UNUSED) {
     const struct thread *a = list_entry(a_, struct thread, elem);
     const struct thread *b = list_entry(b_, struct thread, elem);
 
@@ -568,8 +556,7 @@ void thread_schedule_tail(struct thread *prev) {
        pull out the rug under itself.  (We don't free
        initial_thread because its memory was not obtained via
        palloc().) */
-    if (prev != NULL && prev->status == THREAD_DYING &&
-        prev != initial_thread) {
+    if (prev != NULL && prev->status == THREAD_DYING && prev != initial_thread) {
         ASSERT(prev != cur);
         palloc_free_page(prev);
     }

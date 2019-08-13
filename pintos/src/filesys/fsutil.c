@@ -84,9 +84,7 @@ void fsutil_extract(char **argv UNUSED) {
         /* Read and parse ustar header. */
         block_read(src, sector++, header);
         error = ustar_parse_header(header, &file_name, &type, &size);
-        if (error != NULL)
-            PANIC("bad ustar header in sector %" PRDSNu " (%s)", sector - 1,
-                  error);
+        if (error != NULL) PANIC("bad ustar header in sector %" PRDSNu " (%s)", sector - 1, error);
 
         if (type == USTAR_EOF) {
             /* End of archive. */
@@ -99,19 +97,16 @@ void fsutil_extract(char **argv UNUSED) {
             printf("Putting '%s' into the file system...\n", file_name);
 
             /* Create destination file. */
-            if (!filesys_create(file_name, size))
-                PANIC("%s: create failed", file_name);
+            if (!filesys_create(file_name, size, false)) PANIC("%s: create failed", file_name);
             dst = filesys_open(file_name);
             if (dst == NULL) PANIC("%s: open failed", file_name);
 
             /* Do copy. */
             while (size > 0) {
-                int chunk_size =
-                    (size > BLOCK_SECTOR_SIZE ? BLOCK_SECTOR_SIZE : size);
+                int chunk_size = (size > BLOCK_SECTOR_SIZE ? BLOCK_SECTOR_SIZE : size);
                 block_read(src, sector++, data);
                 if (file_write(dst, data, chunk_size) != chunk_size)
-                    PANIC("%s: write failed with %d bytes unwritten", file_name,
-                          size);
+                    PANIC("%s: write failed with %d bytes unwritten", file_name, size);
                 size -= chunk_size;
             }
 
@@ -173,11 +168,9 @@ void fsutil_append(char **argv) {
     /* Do copy. */
     while (size > 0) {
         int chunk_size = size > BLOCK_SECTOR_SIZE ? BLOCK_SECTOR_SIZE : size;
-        if (sector >= block_size(dst))
-            PANIC("%s: out of space on scratch device", file_name);
+        if (sector >= block_size(dst)) PANIC("%s: out of space on scratch device", file_name);
         if (file_read(src, buffer, chunk_size) != chunk_size)
-            PANIC("%s: read failed with %" PROTd " bytes unread", file_name,
-                  size);
+            PANIC("%s: read failed with %" PROTd " bytes unread", file_name, size);
         memset(buffer + chunk_size, 0, BLOCK_SECTOR_SIZE - chunk_size);
         block_write(dst, sector++, buffer);
         size -= chunk_size;

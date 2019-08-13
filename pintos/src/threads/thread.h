@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "filesys/inode.h"
 #include "threads/fixed-point.h"
 #include "threads/synch.h"
 
@@ -102,12 +103,12 @@ struct thread {
     /* Shared between thread.c and synch.c. */
     struct list_elem elem; /* List element. */
 
-#ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;             /* Page directory. */
     struct list children;          /* List to store all children threads */
     struct babysitter *babysitter; /* Struct to store baby sitter's info */
-#endif
+
+    block_sector_t current_directory;
 
     /* Owned by thread.c. */
     unsigned magic; /* Detects stack overflow. */

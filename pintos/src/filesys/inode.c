@@ -21,7 +21,7 @@ void inode_init(void) { list_init(&open_inodes); }
    device.
    Returns true if successful.
    Returns false if memory or disk allocation fails. */
-bool inode_create(block_sector_t sector, off_t length) {
+bool inode_create(block_sector_t sector, off_t length, bool is_directory) {
     struct inode_disk *disk_inode = NULL;
     bool success = false;
 
@@ -36,6 +36,8 @@ bool inode_create(block_sector_t sector, off_t length) {
         disk_inode->length = 0;
         disk_inode->num_sectors = 0;
         disk_inode->magic = INODE_MAGIC;
+        disk_inode->is_directory = is_directory;
+        disk_inode->directory_size = 0;
         if (inode_disk_extend(disk_inode, length)) {
             block_write(fs_device, sector, disk_inode);
             success = true;

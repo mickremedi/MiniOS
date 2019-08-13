@@ -14,8 +14,7 @@ void lock_release_helper(struct lock *lock, bool already_held);
 /* Initializes the free map. */
 void free_map_init(void) {
     free_map = bitmap_create(block_size(fs_device));
-    if (free_map == NULL)
-        PANIC("bitmap creation failed--file system device is too large");
+    if (free_map == NULL) PANIC("bitmap creation failed--file system device is too large");
     bitmap_mark(free_map, FREE_MAP_SECTOR);
     bitmap_mark(free_map, ROOT_DIR_SECTOR);
     lock_init(&map_lock);
@@ -43,8 +42,7 @@ void lock_release_helper(struct lock *lock, bool already_held) {
 bool free_map_allocate(size_t cnt, block_sector_t *sectorp) {
     bool already_held = lock_acquire_helper(&map_lock);
     block_sector_t sector = bitmap_scan_and_flip(free_map, 0, cnt, false);
-    if (sector != BITMAP_ERROR && free_map_file != NULL &&
-        !bitmap_write(free_map, free_map_file)) {
+    if (sector != BITMAP_ERROR && free_map_file != NULL && !bitmap_write(free_map, free_map_file)) {
         bitmap_set_multiple(free_map, sector, cnt, false);
 
         sector = BITMAP_ERROR;
@@ -85,7 +83,7 @@ void free_map_create(void) {
     bool already_held = lock_acquire_helper(&map_lock);
 
     /* Create inode. */
-    if (!inode_create(FREE_MAP_SECTOR, bitmap_file_size(free_map)))
+    if (!inode_create(FREE_MAP_SECTOR, bitmap_file_size(free_map), false))
         PANIC("free map creation failed");
 
     /* Write bitmap to file. */
@@ -100,8 +98,7 @@ void free_map_create(void) {
 bool free_map_available_space(size_t cnt) {
     bool already_held = lock_acquire_helper(&map_lock);
 
-    size_t totalAvailable =
-        bitmap_count(free_map, 0, block_size(fs_device), false);
+    size_t totalAvailable = bitmap_count(free_map, 0, block_size(fs_device), false);
     lock_release_helper(&map_lock, already_held);
     return totalAvailable >= cnt;
 }
