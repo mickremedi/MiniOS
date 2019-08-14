@@ -1,4 +1,5 @@
 #include "userprog/syscall.h"
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 #include <syscall-nr.h>
@@ -273,7 +274,11 @@ static void syscall_handler(struct intr_frame *f UNUSED) {
             thread_exit();
         }
         unsigned size = (unsigned)args[3];
-        f->eax = file_read(file_node->file, buffer, size);
+        if (file_isdir(file_node->file)) {
+            f->eax = -1;
+        } else {
+            f->eax = file_read(file_node->file, buffer, size);
+        }
         lock_release(&io_lock);
         return;
     }
@@ -286,7 +291,11 @@ static void syscall_handler(struct intr_frame *f UNUSED) {
             thread_exit();
         }
         unsigned size = (unsigned)args[3];
-        f->eax = file_write(file_node->file, buffer, size);
+        if (file_isdir(file_node->file)) {
+            f->eax = -1;
+        } else {
+            f->eax = file_write(file_node->file, buffer, size);
+        }
         lock_release(&io_lock);
         return;
     }
@@ -319,6 +328,10 @@ static void syscall_handler(struct intr_frame *f UNUSED) {
 
     /* bool readdir(int fd, char *name) */
     if (args[0] == SYS_READDIR) {
+        lock_acquire(&io_lock);
+        char *name = (char *)args[2];
+        f->eax = filesys_readdir(file_node->file, name);
+        lock_release(&io_lock);
         return;
     }
     /* bool isdir(int fd) */

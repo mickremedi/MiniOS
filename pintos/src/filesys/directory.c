@@ -32,7 +32,7 @@ bool dir_create(block_sector_t sector, size_t entry_cnt) {
    it takes ownership.  Returns a null pointer on failure. */
 struct dir *dir_open(struct inode *inode) {
     struct dir *dir = calloc(1, sizeof *dir);
-    if (inode != NULL && dir != NULL) {
+    if (inode != NULL && dir != NULL && inode->data.is_directory) {
         dir->inode = inode;
         dir->pos = 0;
         return dir;
@@ -99,28 +99,16 @@ bool dir_lookup(const struct dir *dir, const char *name, struct inode **inode) {
     ASSERT(dir != NULL);
     ASSERT(name != NULL);
 
-    if (lookup(dir, name, &e, NULL))
+    if (strcmp(name, ".") == 0) {
+        *inode = inode_open(dir->inode->sector);
+    } else if (strcmp(name, "..") == 0) {
+        *inode = inode_get_parent(dir->inode);
+    } else if (lookup(dir, name, &e, NULL))
         *inode = inode_open(e.inode_sector);
     else
         *inode = NULL;
 
     return *inode != NULL;
-}
-
-bool dir_sector_lookup(const struct dir *dir, const char *name, block_sector_t *dir_sector) {
-    struct dir_entry e;
-
-    ASSERT(dir != NULL);
-    ASSERT(name != NULL);
-
-    if (strcmp(name, ".")) {
-    } else if () {
-    } else if (lookup(dir, name, &e, NULL))
-        *dir_sector = e.inode_sector;
-    else
-        *dir_sector = NULL;
-
-    return *dir_sector != NULL;
 }
 
 /* Adds a file named NAME to DIR, which must not already contain a
@@ -157,7 +145,8 @@ bool dir_add(struct dir *dir, const char *name, block_sector_t inode_sector) {
     e.in_use = true;
     strlcpy(e.name, name, sizeof e.name);
     e.inode_sector = inode_sector;
-    success = inode_write_at(dir->inode, &e, sizeof e, ofs) == sizeof e;
+    success = inode_add_to_dir(inode_sector, dir->inode->sector) &&
+              inode_write_at(dir->inode, &e, sizeof e, ofs) == sizeof e;
 
 done:
     return success;
@@ -178,9 +167,19 @@ bool dir_remove(struct dir *dir, const char *name) {
     /* Find directory entry. */
     if (!lookup(dir, name, &e, &ofs)) goto done;
 
+    // /* See if trying to remove self */
+    // if (strcmp(name, ".") == 0) {
+    //     inode_close(dir->inode);
+    //     dir->inode = NULL;
+    // }
+
     /* Open inode. */
     inode = inode_open(e.inode_sector);
     if (inode == NULL) goto done;
+    if (inode->data.is_directory) {
+        if (inode->sector == thread_current()->current_directory) goto done;
+        if (inode->data.directory_size != 0 || inode->open_cnt > 1) goto done;
+    }
 
     /* Erase directory entry. */
     e.in_use = false;
@@ -188,6 +187,7 @@ bool dir_remove(struct dir *dir, const char *name) {
 
     /* Remove inode. */
     inode_remove(inode);
+    inode_remove_from_dir(dir->inode->sector);
     success = true;
 
 done:
@@ -215,13 +215,22 @@ bool dir_readdir(struct dir *dir, char name[NAME_MAX + 1]) {
 bool dir_chdir(const char *dir_path) {
     char filename[NAME_MAX + 1];
     struct dir *dir = find_file_dir(dir_path, filename);
-    struct dir_entry e;
+    struct inode *inode = NULL;
 
-    bool success = dir != NULL && lookup(dir, filename, &e, NULL);
+    bool success;
+    if (strcmp(dir_path, "..") == 0) {
+        success = dir != NULL;
+        inode = inode_open(dir->inode->sector);
+    } else {
+        success = dir != NULL && dir_lookup(dir, filename, &inode);
+    }
     dir_close(dir);
 
     if (success) {
-        thread_current()->current_directory = e.inode_sector;
+        if (!inode->data.is_directory) {
+            return false;
+        }
+        thread_current()->current_directory = inode->sector;
     }
 
     return success;
@@ -243,7 +252,23 @@ struct dir *find_file_dir(const char *full_path, char *filename) {
     }
     struct dir *curr_directory = dir_open(curr_inode);
 
+    if (strcmp(full_path, ".") == 0) {
+        strlcpy(filename, full_path, NAME_MAX + 1);
+        return curr_directory;
+    }
+    if (strcmp(full_path, "..") == 0) {
+        struct inode *parent_inode = inode_get_parent(curr_inode);
+        struct dir *parent_directory = dir_open(parent_inode);
+
+        inode_close(curr_inode);
+        dir_close(curr_directory);
+
+        strlcpy(filename, full_path, NAME_MAX + 1);
+        return parent_directory;
+    }
+
     /* Walks through path until we reach the file */
+    char prev_path_part[NAME_MAX + 1];
     char path_part[NAME_MAX + 1];
     int get_status = get_next_part(path_part, &full_path);
     while (get_status == 1) {
@@ -251,6 +276,7 @@ struct dir *find_file_dir(const char *full_path, char *filename) {
         dir_lookup(curr_directory, path_part, &next_node);
         /* If we hit a file or can't go further, make sure it's the last part of the path */
         if (next_node == NULL || !next_node->data.is_directory) {
+            inode_close(next_node);
             if (get_next_part(path_part, &full_path) == 0) {
                 strlcpy(filename, path_part, NAME_MAX + 1);
                 return curr_directory;
@@ -267,6 +293,7 @@ struct dir *find_file_dir(const char *full_path, char *filename) {
         curr_inode = next_node;
         curr_directory = dir_open(next_node);
 
+        strlcpy(prev_path_part, path_part, NAME_MAX + 1);
         get_status = get_next_part(path_part, &full_path);
     }
 
@@ -275,9 +302,19 @@ struct dir *find_file_dir(const char *full_path, char *filename) {
         return NULL;
     }
 
+    if (curr_directory->inode->sector == 1) {
+        strlcpy(filename, ".", NAME_MAX + 1);
+        return curr_directory;
+    }
     /* If last part of the path was a directory then have the filename reference itself */
-    strlcpy(filename, ".", 2);
-    return curr_directory;
+    struct inode *parent_inode = inode_get_parent(curr_inode);
+    struct dir *parent_directory = dir_open(parent_inode);
+
+    dir_close(curr_directory);
+    inode_close(curr_inode);
+
+    strlcpy(filename, prev_path_part, NAME_MAX + 1);
+    return parent_directory;
 }
 
 /* Extracts a file name part from *SRCP into PART, and updates *SRCP so that the

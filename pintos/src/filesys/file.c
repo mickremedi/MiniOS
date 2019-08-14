@@ -133,6 +133,6 @@ off_t file_tell(struct file *file) {
     return file->pos;
 }
 
-block_sector_t file_isdir(struct file *file) { return inode_get_inumber(file->inode); }
+block_sector_t file_isdir(struct file *file) { return file->inode->data.is_directory; }
 
-int file_inumber(struct file *file) { return file->inode->data.is_directory; }
+int file_inumber(struct file *file) { return inode_get_inumber(file->inode); }

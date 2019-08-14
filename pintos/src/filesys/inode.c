@@ -8,6 +8,7 @@
 #include "filesys/free-map.h"
 #include "filesys/inode_utils.h"
 #include "threads/malloc.h"
+#include "threads/thread.h"
 
 /* List of open inodes, so that opening a single inode twice
    returns the same `struct inode'. */
@@ -38,6 +39,7 @@ bool inode_create(block_sector_t sector, off_t length, bool is_directory) {
         disk_inode->magic = INODE_MAGIC;
         disk_inode->is_directory = is_directory;
         disk_inode->directory_size = 0;
+        disk_inode->parent_directory = sector;
         if (inode_disk_extend(disk_inode, length)) {
             block_write(fs_device, sector, disk_inode);
             success = true;
@@ -244,3 +246,39 @@ void inode_allow_write(struct inode *inode) {
 
 /* Returns the length, in bytes, of INODE's data. */
 off_t inode_length(const struct inode *inode) { return inode->data.length; }
+
+struct inode *inode_get_parent(struct inode *inode) {
+    struct inode *inode_parent = inode_open(inode->data.parent_directory);
+    return inode_parent;
+}
+
+bool inode_add_to_dir(block_sector_t inode_sector, block_sector_t parent_sector) {
+    struct inode *inode = inode_open(inode_sector);
+    struct inode *parent_inode = inode_open(parent_sector);
+    if (inode == NULL || parent_inode == NULL) {
+        return false;
+    }
+
+    inode->data.parent_directory = parent_sector;
+    parent_inode->data.directory_size += 1;
+
+    block_write(fs_device, inode->sector, &inode->data);
+    block_write(fs_device, parent_inode->sector, &parent_inode->data);
+
+    inode_close(inode);
+    inode_close(parent_inode);
+    return true;
+}
+
+bool inode_remove_from_dir(block_sector_t parent_sector) {
+    struct inode *parent_inode = inode_open(parent_sector);
+    if (parent_inode == NULL) {
+        return false;
+    }
+    parent_inode->data.directory_size -= 1;
+
+    block_write(fs_device, parent_inode->sector, &parent_inode->data);
+
+    inode_close(parent_inode);
+    return true;
+}

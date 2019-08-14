@@ -1,4 +1,5 @@
 #include "filesys/inode_utils.h"
+#include <bitmap.h>
 #include <debug.h>
 #include <list.h>
 #include <round.h>
@@ -20,12 +21,15 @@ void zero_and_write_block(block_sector_t block) {
 /* Allocates nonconsecutive blocks of memory from free map */
 bool allocate_nonconsec(size_t count, block_sector_t *block_list, size_t start) {
     size_t i = 0;
+
     while (i < count) {
         bool success = free_map_allocate(1, &block_list[start + i]);
         if (!success) {
             printf(
                 "HI THERE! I'M HAVING AN ISSUE :( PLEASE FIND ME IN "
                 "ALLOCATE_NONCONSEC\n");
+            release_nonconsec(count, block_list);
+
             return false;
         }
         i++;

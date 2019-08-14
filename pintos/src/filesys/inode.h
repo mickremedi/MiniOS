@@ -10,8 +10,9 @@ struct bitmap;
 
 /* Identifies an inode. */
 #define INODE_MAGIC 0x494e4f44
-#define NUM_DIRECT 121
+#define NUM_DIRECT 120
 #define NUM_INDIRECT 128
+#define MAX_PAGES 8388608
 
 /* On-disk inode.
    Must be exactly BLOCK_SECTOR_SIZE bytes long. */
@@ -20,6 +21,7 @@ struct inode_disk {
     int num_sectors;                   /* Number of sectors allocated */
     bool is_directory;                 /* States if a file is a directory */
     int directory_size;                /* The number of files in the directory */
+    block_sector_t parent_directory;   /* Directory holding this file */
     block_sector_t direct[NUM_DIRECT]; /* Direct pointers. */
     block_sector_t indirect;           /* Indirect pointer. */
     block_sector_t doubly_indirect;    /* Doubly indirect pointer. */
@@ -48,5 +50,8 @@ off_t inode_write_at(struct inode *, const void *, off_t size, off_t offset);
 void inode_deny_write(struct inode *);
 void inode_allow_write(struct inode *);
 off_t inode_length(const struct inode *);
+struct inode *inode_get_parent(struct inode *inode);
+bool inode_add_to_dir(block_sector_t inode_sector, block_sector_t parent_sector);
+bool inode_remove_from_dir(block_sector_t parent_sector);
 
 #endif /* filesys/inode.h */
