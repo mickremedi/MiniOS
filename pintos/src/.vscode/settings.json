@@ -1,0 +1,12 @@
+{
+	"files.associations": {
+		"directory.h": "c",
+		"inode.h": "c",
+		"filesys.h": "c",
+		"file.h": "c",
+		"off_t.h": "c",
+		"block.h": "c",
+		"syscall.h": "c",
+		"stdbool.h": "c"
+	}
+}
